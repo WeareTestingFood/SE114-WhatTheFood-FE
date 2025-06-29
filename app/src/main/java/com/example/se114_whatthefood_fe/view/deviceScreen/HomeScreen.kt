@@ -1,5 +1,6 @@
 package com.example.se114_whatthefood_fe.view.deviceScreen
 
+import android.R.attr.fontWeight
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -27,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,48 +41,62 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontWeight.Companion.Bold
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.se114_whatthefood_fe.model.FoodModel
+import com.example.se114_whatthefood_fe.model.LocationManager
 import com.example.se114_whatthefood_fe.ui.theme.LightGreen
-import com.example.se114_whatthefood_fe.ui.theme.LighterGreen
 import com.example.se114_whatthefood_fe.ui.theme.White
 import com.example.se114_whatthefood_fe.view.card.Card
 import com.example.se114_whatthefood_fe.view.card.CardRecommendView
 import com.example.se114_whatthefood_fe.view.card.CardView
 import com.example.se114_whatthefood_fe.view.card.rememberOptimizedImageLoader
+import com.example.se114_whatthefood_fe.view_model.FoodViewModel
+import com.google.android.gms.location.LocationServices
+import kotlinx.coroutines.launch
 
 @Composable
 @Preview
 fun HomeScreenPreview() {
-    HomeScreen()
+    //HomeScreen()
 }
 
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
+fun HomeScreen(foodViewModel: FoodViewModel, modifier: Modifier = Modifier) {
     var selectedIndexTab by remember { mutableIntStateOf(0) }
     val tablist = listOf("Gần bạn", "Bán chạy", "Đánh giá tốt")
-    Column(modifier.background(brush = Brush.verticalGradient(colors = listOf(LightGreen, White)))
-        .padding(start = 10.dp, end = 10.dp, top = 10.dp)) {
+    // dung de lay vi tri hien tai cua nguoi dung
+    val context = LocalContext.current
+    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+    val locationManager = remember { LocationManager(context, fusedLocationClient)}
+    // nhung danh sach de hien
+    val ganBanList by foodViewModel.tabGanBanList
+    val banChayList by foodViewModel.tabBanChayList
+    val danhGiaTotList by foodViewModel.tabDanhGiaTotList
+
+    // fetch du lieu
+    FetchData(locationManager = locationManager, foodViewModel = foodViewModel, selectedTab = selectedIndexTab)
+    Column(modifier.padding(start = 10.dp, end = 10.dp, top = 10.dp)) {
 
         SearchBar(modifier = Modifier.wrapContentHeight())
         LazyColumn(modifier = Modifier.padding(horizontal = 10.dp)
                                     .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(6.dp),){
             item {ListRecommendFood(modifier = modifier.fillMaxWidth().wrapContentHeight())}
-//            val listTab: List<String> =
+            // tab cac lua chon
             stickyHeader { TabRowCustom(selectedIndexTab = selectedIndexTab, listTab = tablist,
                 onTabSelected = { index ->
                     selectedIndexTab = index
                 }) }
-//            item {TabRowCustom(selectedIndexTab = selectedIndexTab, listTab = tablist,
-//                onTabSelected = { index ->
-//                    selectedIndexTab = index
-//                })}
-
+            // list card cua mon an
             val listCard = when (selectedIndexTab) {
-                0 -> getDataGanBan()
+                0-> testGetData(foodViewModel = foodViewModel)
+//                0 -> getDataGanBan()
                 1 -> getDataBanChay()
                 2 -> getDataDanhGiaTot()
                 else -> getDataGanBan()
@@ -90,6 +108,45 @@ fun HomeScreen(modifier: Modifier = Modifier) {
 
         }
 
+    }
+}
+
+@Composable
+fun FetchData(locationManager: LocationManager, foodViewModel: FoodViewModel, selectedTab: Int){
+    LaunchedEffect(selectedTab) {
+        when(selectedTab){
+            // load list gan ban
+            0 -> {
+                val location = locationManager.getLocation()
+                location?.let {
+                    foodViewModel.loadTabGanBanList(location)
+                }
+            }
+            // load list ban chay
+            1 -> {
+                foodViewModel.loadBanChayList();
+            }
+            // load list danh gia tot
+            2->{
+                foodViewModel.loadDanhGiaTotList();
+            }
+
+        }
+    }
+}
+
+fun testGetData(foodViewModel: FoodViewModel): List<Card> {
+    // This function should return a list of Card objects for testing purposes
+    val listFood = foodViewModel.tabGanBanList
+    return listFood.value.map { foodItem ->
+        Card(
+            id = foodItem.id,
+            imageLink = "",
+            title = foodItem.foodName,
+            rate = 5.0f, // Assuming a default rate for testing
+            distance = 10.0f, // Assuming a default distance for testing
+            time = 10.0f // Assuming a default time for testing
+        )
     }
 }
 
@@ -177,18 +234,19 @@ fun SearchBar(modifier: Modifier = Modifier) {
         Icon(imageVector = Icons.Filled.Search,
             contentDescription = null,
             tint = LightGreen,
-            modifier = Modifier.size(35.dp))
+            modifier = Modifier.size(40.dp).padding(start = 10.dp))
         TextField(value = textSearch.value,
             onValueChange = { textSearch.value = it },
             placeholder = { Text(text = "Tìm kiếm món ăn",
-                fontWeight = FontWeight.W800,
+                fontWeight = FontWeight.Bold,
                 color = LightGreen) },
             colors = TextFieldDefaults.colors(
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent
-            ))
+            ),
+            modifier = Modifier.weight(1f))
     }
 }
 
@@ -196,7 +254,7 @@ fun SearchBar(modifier: Modifier = Modifier) {
 fun TabRowCustom(modifier: Modifier = Modifier, selectedIndexTab: Int, listTab: List<String>, onTabSelected: (Int) -> Unit) {
     TabRow(selectedTabIndex = selectedIndexTab,
         modifier = modifier.clip(shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)),
-        containerColor = LighterGreen,
+        containerColor = LightGreen,
         contentColor = White,
         indicator = { tabPositions ->
             if (selectedIndexTab < tabPositions.size) {
@@ -385,6 +443,33 @@ fun ListRecommendFood(modifier: Modifier = Modifier) {
         ) {
             items(items = listCard, key = { it.id.toString() }) { card ->
                 CardRecommendView(card = card, imageLoader = rememberOptimizedImageLoader())
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeScreenTest(foodViewModel: FoodViewModel) {
+    val ganBanList = foodViewModel.tabGanBanListTest
+    Text(text = "Test phan trang",
+        modifier = Modifier.padding(8.dp),
+        fontWeight = Bold)
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+
+        items(ganBanList.items.size){ i->
+            if(i >= ganBanList.items.size -1 && !ganBanList.endReached && !ganBanList.isLoading){
+                foodViewModel.loadNextItems()
+            }
+            val card = ganBanList.items[i]
+            Text(text = "${card.foodName + i} - ${card.restaurant.name} - ${card.price} VND",
+                modifier = Modifier.padding(8.dp))
+        }
+        item{
+            if(ganBanList.isLoading)
+            {
+                Row(modifier = Modifier.fillMaxWidth()){
+                    CircularProgressIndicator()
+                }
             }
         }
     }
